@@ -3,7 +3,7 @@
 library(stringr)
 ##read page, example with amphibians
 amp.page<-readLines('http://www.ukrbin.com/distribution.php?action=geotaxa&geoid=182&classid=51442&sp=1') #the http is the 
-#page of the species of interest
+#page of the distribution of amphibian species in Ukraine
 
 ## extract html lines with species names and id
 indexphp<-amp.page[grep("index.*id=",amp.page)]
