@@ -1,3 +1,4 @@
+##This code helps to download species occurrences from the ukrbin dataset (Ukrainian Biodiversity Information Network, http://www.ukrbin.com).
 ## automatize species download from ukrbin
 ## libraries
 library(stringr)
