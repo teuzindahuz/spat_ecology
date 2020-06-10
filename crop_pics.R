@@ -9,6 +9,7 @@ install.packages("raster")
 
 library(raster)
 
+#example to crop pics as 300x300 squares
 files<-list.files("C:/Users/ASUS/Desktop/projects/fb_id/fb_test/nnp/test_crop",".jpg",full.names = T)
 
 dir.out<-"C:/Users/ASUS/Desktop/projects/fb_id/fb_test/nnp/test_crop"
