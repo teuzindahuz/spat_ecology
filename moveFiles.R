@@ -1,4 +1,4 @@
-#move pdfs from subfolder to a folder
+#move pdfs from subfolder to a new folder
 
 install.packages("stringi")
 install.packages("filesstrings")
