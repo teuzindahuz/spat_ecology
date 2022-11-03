@@ -1,3 +1,6 @@
+## cmems raster creation from ncdf 
+##https://resources.marine.copernicus.eu/product-detail/OCEANCOLOUR_BAL_BGC_L3_NRT_009_131/DATA-ACCESS
+##
 library(rgdal)
 library(ncdf4)
 library(raster)
@@ -10,92 +13,85 @@ library(tidyverse)
 library(lubridate)
 library(purrr)
 
-
 # open a netCDF file
-ncin <- nc_open("C:/Users/mlatt/Downloads/waves.nc")
-print(ncin)
-dname <- "VHM0"
+chl <- nc_open("C:/Users/mlatt/postdoc/FT/env_var/cmems/germany/chl.nc")
+print(chl)
+dname <- "CHL" #name var of interest
 
-time <- ncvar_get(ncin,"time")
+time <- ncvar_get(chl,"time")
 time
-tunits <- ncatt_get(ncin,"time","units")
+tunits <- ncatt_get(chl,"time","units")
 nt <- dim(time)
 nt
-dates<-as.POSIXct(time, origin="1970-01-01")
+dates<-as.POSIXct(time, origin="1981-01-01") # check origin in printed info
 dates<-anydate(dates)
 ?anydate
 dates[1]
 
-# get transparency
-tmp_array <- ncvar_get(ncin,dname)
-dlname <- ncatt_get(ncin,dname,"long_name")
-dunits <- ncatt_get(ncin,dname,"units")
-fillvalue <- ncatt_get(ncin,dname,"_FillValue")
-dim(tmp_array)
+# get var
+chl_array <- ncvar_get(chl,dname)
+dlname <- ncatt_get(chl,dname,"long_name")
+dunits <- ncatt_get(chl,dname,"units")
+fillvalue <- ncatt_get(chl,dname,"_FillValue")
+dim(chl_array)
 
+### function to reorient the ncdf in case of rasterization
 
-
-
-#append all ncdf matrix in a list
-
-testL<-list()
-
-for (i in 1:201600 ){ 
-  Ta<-t(tmp_array[,,i])
-  Ta<-Ta[c(31:1),,drop=F]
-  
-  testL[[i]]<-Ta}
-
-#created correct raster from ncdf matrix 
-R1<-raster(testL[[1]])
-plot(R1)
-
-##in case of hourly data
-
-# split matrices in desired periods and applying a function 
-listDaysMax<-list()
-seqDays<-seq(1,201601,24) #split all the matrices in days periods (24 hours)
-length(seqDays)
-for (i in 1:8400){
-  x=testL[c(seqDays[i]:(seqDays[i+1]-1))]
-  #length(x)
-  
-  matDay = matrix(unlist(x),ncol=465,nrow=24,byrow=T) #flatten all matrices as dataframe rows
-  testApply<-matrix(apply(matDay,2,max),ncol=15,nrow=31,byrow=F)
-  R1[]<-testApply
-  listDaysMax[[i]]<-R1
+# list arrays in correct orientation and give date-name----
+reOrient<-function (array) {
+  ListA<-list()
+  for (i in 1:dim(array)[3] ){ 
+    Ta<-apply(array[,,i],1,rev)
+    ListA[[i]]<-Ta}
+  names(ListA)<-c(unique(floor_date(as_date(dates), "day"))[1:length(ListA)])
+  return(ListA)
 }
-#image(testApply)
-#plot(listDaysMax[[2000]])
 
-brickMax<-brick(listDaysMax)
 
-names(brickMax)<-c(unique(floor_date(as_date(dates), "day"))[1:8400])
 
-plot(brickMax[[grep("2007.01.14",names(brickMax))]])
 
-##mean
-
-# split matrices in desired periods and applying a function 
-listDaysmean<-list()
-seqDays<-seq(1,201601,24) #split all the matrices in days periods (24 hours)
-length(seqDays)
-for (i in 1:8400){
-  x=testL[c(seqDays[i]:(seqDays[i+1]-1))]
-  #length(x)
+### function to reduce hourly observations to daily----
+DailyListL<-function (L_array,fun){
+  listDaysFun<-list()
+  seqDays<-seq(1,length(L_array),24)
+  length(seqDays)
+  for (i in 1:(length(seqDays)-1)){
+    x=L_array[c(seqDays[i]:(seqDays[i+1]-1))]
+    #length(x)
+    
+    matDay = matrix(unlist(x),ncol=dim(L_array[[1]])[1]*dim(L_array[[1]])[2],nrow=24,byrow=T)
+    testApply<-matrix(apply(matDay,2,fun),ncol=dim(L_array[[1]])[2],nrow=dim(L_array[[1]])[1],byrow=F)
+    listDaysFun[[i]]<-testApply
+  }
   
-  matDay = matrix(unlist(x),ncol=465,nrow=24,byrow=T) #flatten all matrices as dataframe rows
-  testApply<-matrix(apply(matDay,2,mean),ncol=15,nrow=31,byrow=F)
-  R1[]<-testApply
-  listDaysmean[[i]]<-R1
+  return(listDaysFun)
 }
-#image(testApply)
-#plot(listDaysmean[[2000]])
 
-brickmean<-brick(listDaysmean)
 
-names(brickmean)<-c(unique(floor_date(as_date(dates), "day"))[1:8400])
+### function to obtain values reduce to specific period----
 
-plot(brickmean[[grep("2007.01.14",names(brickmean))]])
+TemporalSubSet<- function (List,YearsInt,MonthsInt,fun) {
+
+#subset years
+subYears<-c(YearsInt)
+Paste<-paste0(subYears,"-|",collapse="")
+Paste<-substring(Paste,1, nchar(Paste)-1)
+YSub<-List[grep(Paste,names(List))]
+#length(YSub)
+
+#subset months
+subMonths<-c(MonthsInt)
+
+Paste<-ifelse(subMonths<10,as.character(paste0("0",subMonths)),as.character(subMonths))
+
+Paste<-paste0("-",Paste,"-|",collapse="")
+Paste<-substring(Paste,1, nchar(Paste)-1)
+MSub<-YSub[grep(Paste,names(YSub))]
+#length(MSub)
+
+mat = matrix(unlist(MSub),ncol=dim(List[[1]])[2]*dim(List[[1]])[1],nrow=length(MSub),byrow=T)
+makeOne<-matrix(apply(mat,2,fun),ncol=dim(List[[1]])[2],nrow=dim(List[[1]])[1],byrow=F)
+return(makeOne)
+}
 
 
