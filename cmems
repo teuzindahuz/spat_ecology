@@ -23,7 +23,7 @@ time
 tunits <- ncatt_get(chl,"time","units")
 nt <- dim(time)
 nt
-dates<-as.POSIXct(time, origin="1981-01-01") # check origin in printed info
+dates<-as.POSIXct(time, origin="1981-01-01") # check origin in printed info, some data have different formats
 dates<-anydate(dates)
 ?anydate
 dates[1]
@@ -63,7 +63,7 @@ DailyListL<-function (L_array,fun){
     testApply<-matrix(apply(matDay,2,fun),ncol=dim(L_array[[1]])[2],nrow=dim(L_array[[1]])[1],byrow=F)
     listDaysFun[[i]]<-testApply
   }
-  
+  names(listDaysFun)<-c(unique(floor_date(as_date(dates), "day"))[1:length(listDaysFun)])
   return(listDaysFun)
 }
 
