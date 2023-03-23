@@ -5,19 +5,41 @@ library(tidync)
 
 char_selection<- "17" # select the period according to the characters in the file names 17 for days, 15 for months, 11 for years
 time_selection<- "02|03" #days/months/years of choice
-pattern<-paste0("^.{",char_selection,"}(",time_selection,").*\\.nc$")
-# set directory path
-folder_path <- "C:/Users/mlatt/postdoc/decision_support_tool/data_collection/env_var/copernicus/waves/test/"
+pattern<-paste0("^.{",char_selection,"}(",time_selection,").*//.nc$")
 
-# get file names with .nc extension
-file_names <- list.files(folder_path, pattern = pattern,recursive = T)
-nc<-file_names[1]
-first<-nc_open(paste0(folder_path,nc))
-# Get the spatial extent information
-lon <- ncvar_get(first, "lon")
-lat <- ncvar_get(nc_open(paste0(folder_path,nc)), "lat")
-lonlat <- c(min(lon), max(lon), min(lat), max(lat))
+#make a loop through each month
+# set directory path
+setwd("C:/Users/mlatt/copernicus_downloads/wam/2020")
+getwd()
+# list the names of all subfolders
+subfolders <- list.dirs(recursive = FALSE,full.names = T)
 # get variable names
+file_names <- list.files(subfolders[1],pattern = ".*\\.nc$")
+
+first<-nc_open(paste0(getwd(),subfolders[1],'/',file_names[1]))
+
+vars <- first$var
+# print variable names
+cat("Variable names:\n")
+for (i in 1:length(vars)) {
+  cat(paste("  ", vars[[i]]$name, "\n", sep = ""))
+}
+
+var<-"VHM0"
+
+
+
+#make a loop through each month
+# set directory path
+setwd("C:/Users/mlatt/copernicus_downloads/wam/2020")
+getwd()
+# list the names of all subfolders
+subfolders <- list.dirs(recursive = FALSE,full.names = T)
+# get variable names
+file_names <- list.files(subfolders[1],pattern = ".*\\.nc$")
+
+first<-nc_open(paste0(getwd(),subfolders[1],'/',file_names[1]))
+
 vars <- first$var
 # print variable names
 cat("Variable names:\n")
@@ -26,39 +48,48 @@ for (i in 1:length(vars)) {
 }
 
 var<-"VTM10"
-listMatrix<-list()
-# loop through file names and read netCDF files
-for (i in 1:length(file_names)) {
-  # open netCDF file
-  nc <- nc_open(paste0(folder_path,file_names[i]))
-  grid <- ncvar_get(nc, var)
-  # Calculate the element-wise average of all matrices in the third dimension
-  average_matrix <- apply(grid, MARGIN = c(1, 2), FUN = function (x) {x<-mean(x,na.rm = T)
-  return(x)})
-  avg_matrix_out <- grid[, , 1] * 0 + average_matrix
-  listMatrix[[i]]<-c(avg_matrix_out)
+
+for (j in 1:length(subfolders)){
+  # get file names with .nc extension
+  file_names <- list.files(subfolders[j],pattern = ".*\\.nc$")
+  first<-nc_open(paste0(getwd(),subfolders[j],'/',file_names[1]))
+  # Get the spatial extent information
+  lon <- ncvar_get(first, "lon")
+  lat <- ncvar_get(first, "lat")
+  lonlat <- c(min(lon), max(lon), min(lat), max(lat))
+  folder_path<-paste0(getwd(),subfolders[j],'/')
+  listMatrix<-list()
+  # loop through file names and read netCDF files
+  for (i in 1:length(file_names)) {
+    # open netCDF file
+    nc <- nc_open(paste0(folder_path,file_names[i]))
+    grid <- ncvar_get(nc, var)
+    # Calculate the element-wise average of all matrices in the third dimension
+    average_matrix <- apply(grid, MARGIN = c(1, 2), FUN = function (x) {x<-max(x,na.rm = T)
+    return(x)})
+    avg_matrix_out <- grid[, , 1] * 0 + average_matrix
+    listMatrix[[i]]<-c(avg_matrix_out)
+    
+  }
   
+  
+  #image(matrixList[[3]])
+  # Get the total number of matrices in the list
+  num_matrices <- length(listMatrix)
+  
+  # Use Reduce function to sum up all the matrices in the list
+  sum_of_matrices <- Reduce(`+`, listMatrix)
+  
+  # Divide the sum by the number of matrices to get the average
+  avg_matrix <- sum_of_matrices / num_matrices
+  avg_matrix <- grid[, , 1] * 0 + avg_matrix
+  #image(avg_matrix)
+  
+  avg_matrixR <- rast(t(avg_matrix[,c(ncol(avg_matrix):1)]),  
+                      crs = "EPSG:4326")
+  
+  ext(avg_matrixR)<-lonlat
+  plot(avg_matrixR)
+  
+  writeRaster(avg_matrixR,paste0(getwd(),"/",substr(subfolders[j], 3,4),var,"_max.tif"),overwrite=T)
 }
-
-matrixList<-lapply(file_names, function (nc){ncPaste <- nc_open(paste0(folder_path,nc))
-grid <- ncvar_get(ncPaste, "VTM10")
-average_matrix <- apply(grid, MARGIN = c(1, 2), FUN = function (x) {x<-mean(x,na.rm = T)})
-return(average_matrix)})
-
-#image(matrixList[[3]])
-# Get the total number of matrices in the list
-num_matrices <- length(matrixList)
-
-# Use Reduce function to sum up all the matrices in the list
-sum_of_matrices <- Reduce(`+`, matrixList)
-
-# Divide the sum by the number of matrices to get the average
-avg_matrix <- sum_of_matrices / num_matrices
-image(avg_matrix)
-
-avg_matrixR <- rast(t(avg_matrix[,c(ncol(avg_matrix):1)]),  
-                   crs = "EPSG:4326")
-
-ext(avg_matrixR)<-lonlat
-plot(avg_matrixR)
-writeRaster(avg_matrixR,"C:/Users/mlatt/postdoc/decision_support_tool/data_collection/env_var/copernicus/avgVTM10202203_lapply.tif",overwrite=T)
